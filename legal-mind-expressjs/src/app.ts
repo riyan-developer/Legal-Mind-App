@@ -33,3 +33,5 @@ app.use('/api/documents', documentsRouter);
 app.use('/api/chats', chatsRouter);
 app.use("/api/internal/indexing", indexingRoutes);
 app.use(errorHandler);
+
+export default app;
