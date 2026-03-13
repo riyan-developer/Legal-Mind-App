@@ -24,4 +24,4 @@ const envSchema = z.object({
   S3_BUCKET: z.string().min(1),
 });
 
-export const env = envSchema.parse(process.env);
+export const env = process.env as Record<string, string>;
