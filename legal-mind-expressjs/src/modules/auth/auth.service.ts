@@ -42,7 +42,59 @@ const buildDisplayName = (identity: {
   return 'LegalMind User';
 };
 
+const buildDisplayNameFromClaims = (claims: SupabaseAccessTokenClaims) =>
+  buildDisplayName({
+    email: claims.email,
+    user_metadata: {
+      ...(claims.user_metadata ?? {}),
+      full_name: claims.full_name,
+      name: claims.name,
+      given_name: claims.given_name,
+      family_name: claims.family_name,
+    },
+  });
+
 const resolveSupabaseIdentity = async (supabaseAccessToken: string): Promise<SupabaseIdentity> => {
+  const decoded = jwt.decode(supabaseAccessToken, { complete: true });
+  const rawClaims =
+    decoded && typeof decoded === 'object' && 'payload' in decoded
+      ? (decoded.payload as Partial<SupabaseAccessTokenClaims>)
+      : null;
+  const tokenInfo = rawClaims
+    ? {
+        iss: rawClaims.iss ?? null,
+        aud: rawClaims.aud ?? null,
+        sub: rawClaims.sub ?? null,
+        exp: rawClaims.exp ?? null,
+        alg:
+          decoded && typeof decoded === 'object' && 'header' in decoded && decoded.header
+            ? (decoded.header as { alg?: string }).alg ?? null
+            : null,
+      }
+    : null;
+
+  try {
+    const { data, error } = await supabase.auth.getClaims(supabaseAccessToken);
+
+    if (!error && data?.claims) {
+      const claims = data.claims as SupabaseAccessTokenClaims;
+
+      if (claims.sub && claims.email) {
+        return {
+          id: claims.sub,
+          email: claims.email,
+          full_name: buildDisplayNameFromClaims(claims),
+        };
+      }
+    }
+  } catch (claimsError) {
+    console.error('Failed to verify Supabase access token via getClaims', {
+      claimsError: claimsError instanceof Error ? claimsError.message : 'Unknown claims error',
+      expectedSupabaseUrl: env.SUPABASE_URL,
+      tokenInfo,
+    });
+  }
+
   const { data, error } = await supabase.auth.getUser(supabaseAccessToken);
 
   if (!error && data.user?.id && data.user.email) {
@@ -70,17 +122,6 @@ const resolveSupabaseIdentity = async (supabaseAccessToken: string): Promise<Sup
       };
     }
   } catch (jwtError) {
-    const decoded = jwt.decode(supabaseAccessToken);
-    const tokenInfo =
-      typeof decoded === 'object' && decoded !== null
-        ? {
-            iss: 'iss' in decoded ? decoded.iss : null,
-            aud: 'aud' in decoded ? decoded.aud : null,
-            sub: 'sub' in decoded ? decoded.sub : null,
-            exp: 'exp' in decoded ? decoded.exp : null,
-          }
-        : null;
-
     console.error('Failed to resolve Supabase identity', {
       supabaseError: error?.message ?? null,
       jwtError: jwtError instanceof Error ? jwtError.message : 'Unknown JWT verification error',

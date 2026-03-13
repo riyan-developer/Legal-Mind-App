@@ -29,6 +29,10 @@ export type SupabaseAccessTokenClaims = {
   exp?: number;
   role?: string;
   user_metadata?: Record<string, unknown>;
+  full_name?: string;
+  name?: string;
+  given_name?: string;
+  family_name?: string;
 };
 
 export type JwtTokenType = 'access' | 'refresh';
