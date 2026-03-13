@@ -1,0 +1,29 @@
+# Byte-code files
+__pycache__
+*.pyc
+
+# Virtual environment
+venv
+env
+/site
+
+# Editor/IDE specific files
+.vscode/        # VS Code directory (optional, depending on team preference)
+.idea/          # PyCharm/IntelliJ directory
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables
+.env
+.secrets.toml
+
+# Operating system files
+.DS_Store       # macOS
+Thumbs.db       # Windows
+
+# Generated distribution files
+dist/
+build/
