@@ -11,7 +11,12 @@ import {
   logoutSchema,
   refreshSessionSchema,
 } from './auth.schema.js';
-import type { AppJwtPayload, AuthUserProfile, SupabaseIdentity } from '../../types/auth.js';
+import type {
+  AppJwtPayload,
+  AuthUserProfile,
+  SupabaseAccessTokenClaims,
+  SupabaseIdentity,
+} from '../../types/auth.js';
 
 const buildDisplayName = (identity: {
   email?: string | null;
@@ -40,15 +45,51 @@ const buildDisplayName = (identity: {
 const resolveSupabaseIdentity = async (supabaseAccessToken: string): Promise<SupabaseIdentity> => {
   const { data, error } = await supabase.auth.getUser(supabaseAccessToken);
 
-  if (error || !data.user?.id || !data.user.email) {
-    throw new AppError('Invalid Supabase session', 401);
+  if (!error && data.user?.id && data.user.email) {
+    return {
+      id: data.user.id,
+      email: data.user.email,
+      full_name: buildDisplayName(data.user),
+    };
   }
 
-  return {
-    id: data.user.id,
-    email: data.user.email,
-    full_name: buildDisplayName(data.user),
-  };
+  try {
+    const claims = jwt.verify(
+      supabaseAccessToken,
+      env.SUPABASE_JWT_SECRET,
+    ) as SupabaseAccessTokenClaims;
+
+    if (claims.sub && claims.email) {
+      return {
+        id: claims.sub,
+        email: claims.email,
+        full_name: buildDisplayName({
+          email: claims.email,
+          user_metadata: claims.user_metadata,
+        }),
+      };
+    }
+  } catch (jwtError) {
+    const decoded = jwt.decode(supabaseAccessToken);
+    const tokenInfo =
+      typeof decoded === 'object' && decoded !== null
+        ? {
+            iss: 'iss' in decoded ? decoded.iss : null,
+            aud: 'aud' in decoded ? decoded.aud : null,
+            sub: 'sub' in decoded ? decoded.sub : null,
+            exp: 'exp' in decoded ? decoded.exp : null,
+          }
+        : null;
+
+    console.error('Failed to resolve Supabase identity', {
+      supabaseError: error?.message ?? null,
+      jwtError: jwtError instanceof Error ? jwtError.message : 'Unknown JWT verification error',
+      expectedSupabaseUrl: env.SUPABASE_URL,
+      tokenInfo,
+    });
+  }
+
+  throw new AppError('Invalid Supabase session', 401);
 };
 
 const issueTokens = (user: AuthUserProfile) => {

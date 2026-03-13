@@ -21,6 +21,16 @@ export type SupabaseIdentity = {
   full_name: string;
 };
 
+export type SupabaseAccessTokenClaims = {
+  sub: string;
+  email?: string;
+  iss?: string;
+  aud?: string | string[];
+  exp?: number;
+  role?: string;
+  user_metadata?: Record<string, unknown>;
+};
+
 export type JwtTokenType = 'access' | 'refresh';
 
 export type AppJwtPayload = {
