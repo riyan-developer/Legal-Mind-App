@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { z } from 'zod';
 
 const envSchema = z.object({
-  // PORT: z.coerce.number().default(4000),
+  PORT: z.coerce.number().default(4000).optional(),
   CLIENT_ORIGIN: z.string().default('http://localhost:5173'),
   PYTHON_API_BASE_URL: z.string().url().default('http://localhost:8001'),
   EXPRESS_INTERNAL_API_KEY: z.string().min(1).default('super-secret-internal-key'),
@@ -24,4 +24,4 @@ const envSchema = z.object({
   S3_BUCKET: z.string().min(1),
 });
 
-export const env = process.env;
+export const env = envSchema.parse(process.env);
