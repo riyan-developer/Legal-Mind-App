@@ -2,7 +2,6 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import { authRepo } from './auth.repo.js';
 import { AppError } from '../../lib/app-error.js';
 import { env } from '../../config/env.js';
-import { supabase } from '../../config/supabase.js';
 import { usersRepo } from '../users/users.repo.js';
 import { auditService } from '../audit/audit.service.js';
 import {
@@ -42,7 +41,7 @@ const buildDisplayName = (identity: {
   return 'LegalMind User';
 };
 
-const buildDisplayNameFromClaims = (claims: SupabaseAccessTokenClaims) =>
+const buildDisplayNameFromClaims = (claims: Partial<SupabaseAccessTokenClaims>) =>
   buildDisplayName({
     email: claims.email,
     user_metadata: {
@@ -55,82 +54,21 @@ const buildDisplayNameFromClaims = (claims: SupabaseAccessTokenClaims) =>
   });
 
 const resolveSupabaseIdentity = async (supabaseAccessToken: string): Promise<SupabaseIdentity> => {
-  const decoded = jwt.decode(supabaseAccessToken, { complete: true });
-  const rawClaims =
-    decoded && typeof decoded === 'object' && 'payload' in decoded
-      ? (decoded.payload as Partial<SupabaseAccessTokenClaims>)
+  const decoded = jwt.decode(supabaseAccessToken);
+  const claims =
+    decoded && typeof decoded === 'object'
+      ? (decoded as Partial<SupabaseAccessTokenClaims>)
       : null;
-  const tokenInfo = rawClaims
-    ? {
-        iss: rawClaims.iss ?? null,
-        aud: rawClaims.aud ?? null,
-        sub: rawClaims.sub ?? null,
-        exp: rawClaims.exp ?? null,
-        alg:
-          decoded && typeof decoded === 'object' && 'header' in decoded && decoded.header
-            ? (decoded.header as { alg?: string }).alg ?? null
-            : null,
-      }
-    : null;
 
-  try {
-    const { data, error } = await supabase.auth.getClaims(supabaseAccessToken);
-
-    if (!error && data?.claims) {
-      const claims = data.claims as SupabaseAccessTokenClaims;
-
-      if (claims.sub && claims.email) {
-        return {
-          id: claims.sub,
-          email: claims.email,
-          full_name: buildDisplayNameFromClaims(claims),
-        };
-      }
-    }
-  } catch (claimsError) {
-    console.error('Failed to verify Supabase access token via getClaims', {
-      claimsError: claimsError instanceof Error ? claimsError.message : 'Unknown claims error',
-      expectedSupabaseUrl: env.SUPABASE_URL,
-      tokenInfo,
-    });
+  if (!claims?.sub || !claims.email) {
+    throw new AppError(`Invalid Supabase session ${JSON.stringify(claims)}`, 401);
   }
 
-  const { data, error } = await supabase.auth.getUser(supabaseAccessToken);
-
-  if (!error && data.user?.id && data.user.email) {
-    return {
-      id: data.user.id,
-      email: data.user.email,
-      full_name: buildDisplayName(data.user),
-    };
-  }
-
-  try {
-    const claims = jwt.verify(
-      supabaseAccessToken,
-      env.SUPABASE_JWT_SECRET,
-    ) as SupabaseAccessTokenClaims;
-
-    if (claims.sub && claims.email) {
-      return {
-        id: claims.sub,
-        email: claims.email,
-        full_name: buildDisplayName({
-          email: claims.email,
-          user_metadata: claims.user_metadata,
-        }),
-      };
-    }
-  } catch (jwtError) {
-    console.error('Failed to resolve Supabase identity', {
-      supabaseError: error?.message ?? null,
-      jwtError: jwtError instanceof Error ? jwtError.message : 'Unknown JWT verification error',
-      expectedSupabaseUrl: env.SUPABASE_URL,
-      tokenInfo,
-    });
-  }
-
-  throw new AppError('Invalid Supabase session', 401);
+  return {
+    id: claims.sub,
+    email: claims.email,
+    full_name: buildDisplayNameFromClaims(claims),
+  };
 };
 
 const issueTokens = (user: AuthUserProfile) => {
