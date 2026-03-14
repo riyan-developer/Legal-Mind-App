@@ -14,6 +14,12 @@ LegalMind is split into three services:
 - Storage: S3 for uploaded PDFs
 - Database: Supabase for users, documents, chunks, chats, messages, audit logs
 
+## Deployment
+
+- `legal-mind-fe` is deployed on Vercel
+- `legal-mind-expressjs` is deployed on AWS EC2
+- `legal-mind-python` is deployed on AWS EC2
+
 ## How file upload works
 
 1. User uploads a PDF from the frontend.
