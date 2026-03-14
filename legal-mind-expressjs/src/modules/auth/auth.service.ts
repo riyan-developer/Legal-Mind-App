@@ -2,6 +2,7 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import { authRepo } from './auth.repo.js';
 import { AppError } from '../../lib/app-error.js';
 import { env } from '../../config/env.js';
+import { supabase } from '../../config/supabase.js';
 import { usersRepo } from '../users/users.repo.js';
 import { auditService } from '../audit/audit.service.js';
 import {
@@ -10,12 +11,7 @@ import {
   logoutSchema,
   refreshSessionSchema,
 } from './auth.schema.js';
-import type {
-  AppJwtPayload,
-  AuthUserProfile,
-  SupabaseAccessTokenClaims,
-  SupabaseIdentity,
-} from '../../types/auth.js';
+import type { AppJwtPayload, AuthUserProfile, SupabaseIdentity } from '../../types/auth.js';
 
 const buildDisplayName = (identity: {
   email?: string | null;
@@ -41,33 +37,17 @@ const buildDisplayName = (identity: {
   return 'LegalMind User';
 };
 
-const buildDisplayNameFromClaims = (claims: Partial<SupabaseAccessTokenClaims>) =>
-  buildDisplayName({
-    email: claims.email,
-    user_metadata: {
-      ...(claims.user_metadata ?? {}),
-      full_name: claims.full_name,
-      name: claims.name,
-      given_name: claims.given_name,
-      family_name: claims.family_name,
-    },
-  });
-
 const resolveSupabaseIdentity = async (supabaseAccessToken: string): Promise<SupabaseIdentity> => {
-  const decoded = jwt.decode(supabaseAccessToken);
-  const claims =
-    decoded && typeof decoded === 'object'
-      ? (decoded as Partial<SupabaseAccessTokenClaims>)
-      : null;
+  const { data, error } = await supabase.auth.getUser(supabaseAccessToken);
 
-  if (!claims?.sub || !claims.email) {
-    throw new AppError(`Invalid Supabase session ${JSON.stringify(claims)}`, 401);
+  if (error || !data.user?.id || !data.user.email) {
+    throw new AppError('Invalid Supabase session', 401);
   }
 
   return {
-    id: claims.sub,
-    email: claims.email,
-    full_name: buildDisplayNameFromClaims(claims),
+    id: data.user.id,
+    email: data.user.email,
+    full_name: buildDisplayName(data.user),
   };
 };
 
