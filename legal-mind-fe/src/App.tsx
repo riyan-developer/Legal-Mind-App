@@ -14,7 +14,56 @@ import NotFound from "./pages/NotFound.tsx";
 import { AppWebSocketProvider } from "@/realtime/websocket.context.tsx";
 
 const queryClient = new QueryClient();
-const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL || "ws://localhost:4000/ws";
+
+const normalizeWebSocketBaseUrl = (value: string) => {
+  const trimmed = value.trim();
+  const isSecurePage =
+    typeof window !== "undefined" ? window.location.protocol === "https:" : false;
+  const targetProtocol = isSecurePage ? "wss:" : "ws:";
+
+  try {
+    const url = new URL(
+      trimmed.includes("://") ? trimmed : `${targetProtocol}//${trimmed}`,
+    );
+
+    if (
+      url.protocol === "ws:" ||
+      url.protocol === "wss:" ||
+      url.protocol === "http:" ||
+      url.protocol === "https:"
+    ) {
+      url.protocol = targetProtocol;
+    }
+
+    return url.toString();
+  } catch {
+    return trimmed;
+  }
+};
+
+const resolveWebSocketBaseUrl = () => {
+  const configuredWsBaseUrl = import.meta.env.VITE_WS_BASE_URL?.trim();
+
+  if (configuredWsBaseUrl) {
+    return normalizeWebSocketBaseUrl(configuredWsBaseUrl);
+  }
+
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+
+  if (apiBaseUrl) {
+    const apiUrl = new URL(apiBaseUrl);
+    apiUrl.pathname = "/ws";
+    apiUrl.search = "";
+    apiUrl.hash = "";
+    return normalizeWebSocketBaseUrl(apiUrl.toString());
+  }
+
+  if (typeof window !== "undefined") {
+    return normalizeWebSocketBaseUrl(`${window.location.host}/ws`);
+  }
+
+  return "ws://localhost:4000/ws";
+};
 
 const ProtectedChatRoute = () => {
   const { hydrated, status } = useAuth();
@@ -38,6 +87,7 @@ const AppShell = () => {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   const resetChat = useAppStore((state) => state.resetChat);
+  const wsBaseUrl = resolveWebSocketBaseUrl();
 
   const wsUrl = accessToken
     ? `${wsBaseUrl}?token=${encodeURIComponent(accessToken)}`

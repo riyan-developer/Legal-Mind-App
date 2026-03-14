@@ -27,6 +27,7 @@ const postAuth = <T>(path: string, body: unknown) =>
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
     },
     body: JSON.stringify(body),
   }).then((response) => readJson<T>(response));
