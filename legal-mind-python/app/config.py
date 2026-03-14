@@ -19,6 +19,8 @@ class Settings(BaseModel):
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_embedding_model: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     openai_chat_model: str = os.getenv("OPENAI_CHAT_MODEL", "gpt-5")
+    answer_max_context_chars: int = int(os.getenv("ANSWER_MAX_CONTEXT_CHARS", "800"))
+    answer_max_context_chunks: int = int(os.getenv("ANSWER_MAX_CONTEXT_CHUNKS", "8"))
 
 
 settings = Settings()

@@ -3,7 +3,7 @@ from app.models.question_models import (
     QuestionEmbeddingRequest,
     QuestionEmbeddingResponse,
 )
-from app.services.embedding_service import create_embeddings
+from app.services.embedding_service import create_embeddings_async
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
@@ -15,7 +15,7 @@ async def embed_question(payload: QuestionEmbeddingRequest):
     if not question:
       raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    embeddings = create_embeddings([question])
+    embeddings = await create_embeddings_async([question])
 
     if not embeddings or not embeddings[0]:
         raise HTTPException(status_code=500, detail="Failed to create embedding")

@@ -1,12 +1,14 @@
 import json
 import re
+from collections.abc import AsyncIterator
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 from app.config import settings
 
-client = OpenAI(api_key=settings.openai_api_key)
+client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-MAX_CONTEXT_CHARS = 1200
+MAX_CONTEXT_CHARS = max(settings.answer_max_context_chars, 200)
+MAX_CONTEXT_CHUNKS = max(settings.answer_max_context_chunks, 1)
 MAX_EXCERPT_CHARS = 360
 MAX_SEARCH_TEXT_CHARS = 180
 MIN_SEARCH_TEXT_CHARS = 32
@@ -100,7 +102,7 @@ def clean_section_title(section_title: str | None, excerpt: str) -> str | None:
 def build_context(chunks: list[dict]) -> str:
     parts = []
 
-    for index, chunk in enumerate(chunks):
+    for index, chunk in enumerate(chunks[:MAX_CONTEXT_CHUNKS]):
         source_id = index + 1
         page = chunk.get("page_number") or index + 1
         text = truncate_text(normalize_text(chunk.get("chunk_text", "")), MAX_CONTEXT_CHARS)
@@ -116,7 +118,7 @@ def build_context(chunks: list[dict]) -> str:
 def build_citations(chunks: list[dict]) -> list[dict]:
     citations = []
 
-    for index, chunk in enumerate(chunks):
+    for index, chunk in enumerate(chunks[:MAX_CONTEXT_CHUNKS]):
         excerpt = build_display_excerpt(chunk.get("chunk_text", ""))
 
         if not excerpt:
@@ -153,38 +155,37 @@ Sources:
 {context}
 """.strip()
 
-def stream_answer_question_from_chunks(question: str, chunks: list[dict]):
+async def stream_answer_question_from_chunks(
+    question: str,
+    chunks: list[dict],
+) -> AsyncIterator[str]:
     prompt = build_answer_prompt(question, chunks)
     citations = build_citations(chunks)
+    answer_parts: list[str] = []
 
-    def generate():
-        answer_parts: list[str] = []
+    try:
+        async with client.responses.stream(
+            model=settings.openai_chat_model,
+            input=prompt,
+        ) as stream:
+            async for event in stream:
+                if event.type == "response.output_text.delta" and event.delta:
+                    answer_parts.append(event.delta)
+                    yield json.dumps({
+                        "type": "answer.delta",
+                        "delta": event.delta,
+                    }) + "\n"
 
-        try:
-            with client.responses.stream(
-                model=settings.openai_chat_model,
-                input=prompt,
-            ) as stream:
-                for event in stream:
-                    if event.type == "response.output_text.delta" and event.delta:
-                        answer_parts.append(event.delta)
-                        yield json.dumps({
-                            "type": "answer.delta",
-                            "delta": event.delta,
-                        }) + "\n"
+            final_response = await stream.get_final_response()
+            answer_text = "".join(answer_parts).strip() or final_response.output_text.strip()
 
-                final_response = stream.get_final_response()
-                answer_text = "".join(answer_parts).strip() or final_response.output_text.strip()
-
-                yield json.dumps({
-                    "type": "answer.completed",
-                    "answer": answer_text,
-                    "citations": citations,
-                }) + "\n"
-        except Exception as exc:
             yield json.dumps({
-                "type": "answer.error",
-                "error": str(exc),
+                "type": "answer.completed",
+                "answer": answer_text,
+                "citations": citations,
             }) + "\n"
-
-    return generate()
+    except Exception as exc:
+        yield json.dumps({
+            "type": "answer.error",
+            "error": str(exc),
+        }) + "\n"
