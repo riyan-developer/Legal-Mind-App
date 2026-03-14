@@ -14,40 +14,7 @@ import NotFound from "./pages/NotFound.tsx";
 import { AppWebSocketProvider } from "@/realtime/websocket.context.tsx";
 
 const queryClient = new QueryClient();
-
-const resolveWebSocketBaseUrl = () => {
-  const configuredWsBaseUrl = import.meta.env.VITE_WS_BASE_URL?.trim();
-
-  if (configuredWsBaseUrl) {
-    if (
-      typeof window !== "undefined" &&
-      window.location.protocol === "https:" &&
-      configuredWsBaseUrl.startsWith("ws://")
-    ) {
-      return `wss://${configuredWsBaseUrl.slice("ws://".length)}`;
-    }
-
-    return configuredWsBaseUrl;
-  }
-
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-
-  if (apiBaseUrl) {
-    const apiUrl = new URL(apiBaseUrl);
-    apiUrl.protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:";
-    apiUrl.pathname = "/ws";
-    apiUrl.search = "";
-    apiUrl.hash = "";
-    return apiUrl.toString();
-  }
-
-  if (typeof window !== "undefined") {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/ws`;
-  }
-
-  return "ws://localhost:4000/ws";
-};
+const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL || "ws://localhost:4000/ws";
 
 const ProtectedChatRoute = () => {
   const { hydrated, status } = useAuth();
@@ -71,7 +38,7 @@ const AppShell = () => {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   const resetChat = useAppStore((state) => state.resetChat);
-  const wsBaseUrl = resolveWebSocketBaseUrl();
+
   const wsUrl = accessToken
     ? `${wsBaseUrl}?token=${encodeURIComponent(accessToken)}`
     : null;
